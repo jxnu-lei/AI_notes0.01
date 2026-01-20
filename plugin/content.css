@@ -1,0 +1,217 @@
+/* AI笔记插件内容脚本样式 */
+
+/* 采集工具栏样式 */
+.ai-note-capture-toolbar {
+  position: absolute;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 8px;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.ai-note-capture-btn {
+  background: #f1f5f9;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-note-capture-btn:hover {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.ai-note-capture-btn.primary {
+  background: #6366f1;
+  color: white;
+}
+
+.ai-note-capture-btn.primary:hover {
+  background: #4f46e5;
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+}
+
+/* 选中文本高亮样式 */
+.ai-note-selection-highlight {
+  background-color: rgba(99, 102, 241, 0.2);
+  border-radius: 2px;
+}
+
+/* 笔记卡片样式 */
+.ai-note-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 12px;
+  margin: 8px 0;
+  border-left: 4px solid #6366f1;
+}
+
+.ai-note-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.ai-note-card-content {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.ai-note-card-meta {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* 上下文菜单样式 */
+.ai-note-context-menu {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 8px 0;
+  min-width: 180px;
+  z-index: 9999;
+}
+
+.ai-note-context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #334155;
+  transition: background-color 0.2s ease;
+}
+
+.ai-note-context-menu-item:hover {
+  background-color: #f1f5f9;
+}
+
+.ai-note-context-menu-item.separator {
+  height: 1px;
+  background-color: #e2e8f0;
+  margin: 4px 0;
+  padding: 0;
+  cursor: default;
+}
+
+.ai-note-context-menu-item.separator:hover {
+  background-color: #e2e8f0;
+}
+
+/* 通知样式 */
+.ai-note-notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 12px 16px;
+  max-width: 300px;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-note-notification.success {
+  border-left: 4px solid #10b981;
+}
+
+.ai-note-notification.error {
+  border-left: 4px solid #ef4444;
+}
+
+.ai-note-notification.warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.ai-note-notification.info {
+  border-left: 4px solid #3b82f6;
+}
+
+.ai-note-notification-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.ai-note-notification-message {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* 加载动画样式 */
+.ai-note-loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f1f5f9;
+  border-radius: 50%;
+  border-top-color: #6366f1;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ai-note-capture-toolbar {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    justify-content: center;
+  }
+  
+  .ai-note-capture-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .ai-note-notification {
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+}
