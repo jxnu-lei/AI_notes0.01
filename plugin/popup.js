@@ -468,19 +468,66 @@ function adjustInputHeight() {
   console.log('Auto-adjust: Input height ->', finalInputHeight, 'px, Container height ->', finalContainerHeight, 'px');
 }
 
+// 对话框调整大小功能的全局变量
+let isResizing = false;
+let startY = 0;
+let startContainerHeight = 0;
+let startInputHeight = 0;
+let isManuallyResized = false;
+let resizeHandle = null;
+
+// 鼠标移动事件处理函数
+function handleMouseMove(e) {
+  if (!isResizing || !resizeHandle) return;
+  
+  console.log('Mouse moving during input resize');
+  
+  // 阻止默认行为和事件冒泡
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // 计算新的容器和输入框高度（向上拖动放大，向下拖动缩小）
+  const deltaY = startY - e.clientY;
+  const newContainerHeight = startContainerHeight + deltaY;
+  
+  // 设置最小高度和最大高度
+  // 最小高度：默认一行高度（40px）
+  // 最大高度：整个对话框的3分之2
+  const minHeight = 60; // 容器最小高度60px
+  const maxHeight = Math.floor(window.innerHeight * 2 / 3);
+  
+  if (newContainerHeight >= minHeight && newContainerHeight <= maxHeight) {
+    // 同步调整输入框容器和输入框的高度
+    chatInputContainer.style.height = `${newContainerHeight}px`;
+    // 设置输入框高度为容器高度减去内边距和边框
+    const inputHeight = newContainerHeight - 24; // 24px = 上下各1rem padding
+    chatInput.style.height = `${inputHeight}px`;
+    console.log('Container height set to:', newContainerHeight, 'Input height set to:', inputHeight);
+    
+    // 标记为手动调整
+    isManuallyResized = true;
+  }
+}
+
+// 鼠标释放事件处理函数
+function handleMouseUp() {
+  if (isResizing) {
+    console.log('Mouse up, input resizing stopped');
+    isResizing = false;
+  }
+}
+
+// 鼠标离开窗口事件处理函数
+function handleMouseLeave() {
+  if (isResizing) {
+    console.log('Mouse left window, input resizing stopped');
+    isResizing = false;
+  }
+}
+
 // 初始化对话框调整大小功能
 function initDialogResizeFunctionality() {
   console.log('Initializing dialog resize functionality...');
-  
-  let isResizing = false;
-  let startY = 0;
-  let startContainerHeight = 0;
-  let startInputHeight = 0;
-  let isManuallyResized = false; // 标志：用户是否手动调整了高度
-  
-  // 获取输入框容器和输入框元素
-  const chatInputContainer = document.getElementById('chat-input-container');
-  const chatInput = document.getElementById('chat-input');
   
   if (!chatInputContainer) {
     console.error('Chat input container not found!');
@@ -488,6 +535,11 @@ function initDialogResizeFunctionality() {
   }
   
   console.log('Chat input container found:', chatInputContainer);
+  
+  // 移除任何现有的resizeHandle元素，避免重复添加
+  const existingResizeHandles = chatInputContainer.querySelectorAll('[style*="cursor: ns-resize"]');
+  existingResizeHandles.forEach(handle => handle.remove());
+  console.log('Removed', existingResizeHandles.length, 'existing resize handles');
   
   // 计算最大高度为整个对话框的3分之2
   const maxHeight = Math.floor(window.innerHeight * 2 / 3);
@@ -503,7 +555,7 @@ function initDialogResizeFunctionality() {
   console.log('Initial input height set to:', initialInputHeight, 'px');
   
   // 在输入框容器顶部添加一个不可见的调整区域
-  const resizeHandle = document.createElement('div');
+  resizeHandle = document.createElement('div');
   resizeHandle.style.position = 'absolute';
   resizeHandle.style.top = '0';
   resizeHandle.style.left = '0';
@@ -526,17 +578,6 @@ function initDialogResizeFunctionality() {
   chatInputContainer.style.right = '0';
   console.log('Chat input container position set to relative');
   
-  // 鼠标悬停效果 - 保持透明
-  resizeHandle.addEventListener('mouseenter', () => {
-    resizeHandle.style.backgroundColor = 'transparent';
-  });
-  
-  resizeHandle.addEventListener('mouseleave', () => {
-    if (!isResizing) {
-      resizeHandle.style.backgroundColor = 'transparent';
-    }
-  });
-  
   // 鼠标按下事件 - 保持透明
   resizeHandle.addEventListener('mousedown', (e) => {
     console.log('Mouse down on input resize handle');
@@ -546,65 +587,25 @@ function initDialogResizeFunctionality() {
     startInputHeight = chatInput.offsetHeight;
     console.log('Start container height:', startContainerHeight, 'Start input height:', startInputHeight);
     
-    // 保持透明背景
-    resizeHandle.style.backgroundColor = 'transparent';
-    
     // 阻止默认行为和事件冒泡
     e.preventDefault();
     e.stopPropagation();
   });
   
-  // 鼠标移动事件 - 使用window而不是document以确保在插件窗口外也能捕获
-  window.addEventListener('mousemove', (e) => {
-    if (!isResizing) return;
-    
-    console.log('Mouse moving during input resize');
-    
-    // 阻止默认行为和事件冒泡
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // 计算新的容器和输入框高度（向上拖动放大，向下拖动缩小）
-    const deltaY = startY - e.clientY;
-    const newContainerHeight = startContainerHeight + deltaY;
-    
-    // 设置最小高度和最大高度
-    // 最小高度：默认一行高度（40px）
-    // 最大高度：整个对话框的3分之2
-    const minHeight = 60; // 容器最小高度60px
-    
-    if (newContainerHeight >= minHeight && newContainerHeight <= maxHeight) {
-      // 同步调整输入框容器和输入框的高度
-      chatInputContainer.style.height = `${newContainerHeight}px`;
-      // 设置输入框高度为容器高度减去内边距和边框
-      const inputHeight = newContainerHeight - 24; // 24px = 上下各1rem padding
-      chatInput.style.height = `${inputHeight}px`;
-      console.log('Container height set to:', newContainerHeight, 'Input height set to:', inputHeight);
-      
-      // 标记为手动调整
-      isManuallyResized = true;
-    }
-  });
+  // 重置所有状态
+  isResizing = false;
+  isManuallyResized = false;
   
-  // 鼠标释放事件
-  window.addEventListener('mouseup', () => {
-    if (isResizing) {
-      console.log('Mouse up, input resizing stopped');
-      isResizing = false;
-      // 保持透明背景
-      resizeHandle.style.backgroundColor = 'transparent';
-    }
-  });
+  // 确保只添加一次window事件监听器
+  // 先移除可能存在的旧监听器
+  window.removeEventListener('mousemove', handleMouseMove);
+  window.removeEventListener('mouseup', handleMouseUp);
+  window.removeEventListener('mouseleave', handleMouseLeave);
   
-  // 鼠标离开窗口事件
-  window.addEventListener('mouseleave', () => {
-    if (isResizing) {
-      console.log('Mouse left window, input resizing stopped');
-      isResizing = false;
-      // 保持透明背景
-      resizeHandle.style.backgroundColor = 'transparent';
-    }
-  });
+  // 然后添加新的监听器
+  window.addEventListener('mousemove', handleMouseMove);
+  window.addEventListener('mouseup', handleMouseUp);
+  window.addEventListener('mouseleave', handleMouseLeave);
   
   // 修改自动调整高度函数，添加手动调整标志检查
   const originalAdjustInputHeight = adjustInputHeight;
