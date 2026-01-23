@@ -385,10 +385,10 @@ async function sendMessage() {
 
 // 调用真实AI模型处理消息
 async function processMessageWithAI(content) {
+  // 构建最终传给AI的完整内容，与background.js中保持一致
+  const finalPrompt = `${currentSystemPrompt}\n\n请处理以下内容：\n\n${content}`;
   log(`使用系统提示词处理消息，系统提示词长度: ${currentSystemPrompt.length} 字符`, LOG_LEVELS.DEBUG);
-  log(`最终发给AI的内容顺序: 系统提示词在前，用户输入在后`, LOG_LEVELS.DEBUG);
-  log(`系统提示词内容: ${currentSystemPrompt}`, LOG_LEVELS.DEBUG);
-  log(`用户输入内容: ${content}`, LOG_LEVELS.DEBUG);
+  log(`最终发给AI的完整内容: ${finalPrompt}`, LOG_LEVELS.DEBUG);
   
   try {
     // 向background.js发送消息，请求AI处理

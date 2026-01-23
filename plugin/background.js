@@ -345,7 +345,8 @@ async function storeNoteWithClassification(data) {
   try {
     const { userInput, aiResponse, classification } = data;
     
-    console.log('开始处理笔记存储:', data);
+    console.log('开始处理笔记存储');
+    console.log('aiResponse长度:', aiResponse?.length);
     
     // 1. 检查文件系统权限
     const hasPermission = await checkFileSystemPermission();
@@ -355,6 +356,7 @@ async function storeNoteWithClassification(data) {
     
     // 2. 检查AI响应是否已经包含分类信息或直接提供了分类
     let finalClassification;
+    let parseError = null;
     
     // 检查是否直接提供了分类信息（用于后续重试或手动分类场景）
     if (classification && classification.primaryCategory && classification.secondaryCategory) {
@@ -363,24 +365,52 @@ async function storeNoteWithClassification(data) {
     } 
     // 检查AI响应是否包含分类信息
     else if (aiResponse) {
+      // 清理响应
+      let cleanedResponse = aiResponse.trim();
+      
+      // 移除Markdown代码块标记（支持多种格式）
+      cleanedResponse = cleanedResponse.replace(/^```(?:json)?\s*/i, '');
+      cleanedResponse = cleanedResponse.replace(/\s*```\s*$/, '');
+      cleanedResponse = cleanedResponse.trim();
+      
+      console.log('清理后的响应长度:', cleanedResponse.length);
+      console.log('清理后的响应前100字符:', cleanedResponse.substring(0, 100));
+      console.log('清理后的响应后100字符:', cleanedResponse.substring(Math.max(0, cleanedResponse.length - 100)));
+      
+      // 方法1: 尝试完整JSON解析
       try {
-        console.log('原始AI响应内容:', aiResponse);
-        
-        // 尝试从AI响应中提取分类信息
-        // 移除可能的代码块标记
-        const cleanedResponse = aiResponse.replace(/^```json\s*|\s*```$/g, '');
-        console.log('移除代码块标记后:', cleanedResponse);
-        
-        // 进一步清理：只保留JSON部分
         const jsonStart = cleanedResponse.indexOf('{');
         console.log('JSON开始位置:', jsonStart);
         
         if (jsonStart !== -1) {
-          // 寻找最外层的JSON结束位置，考虑嵌套结构
+          // 寻找最外层的JSON结束位置
           let braceCount = 0;
           let jsonEnd = -1;
+          let inString = false;
+          let escapeNext = false;
+          
           for (let i = jsonStart; i < cleanedResponse.length; i++) {
             const char = cleanedResponse[i];
+            
+            if (escapeNext) {
+              escapeNext = false;
+              continue;
+            }
+            
+            if (char === '\\') {
+              escapeNext = true;
+              continue;
+            }
+            
+            if (char === '"') {
+              inString = !inString;
+              continue;
+            }
+            
+            if (inString) {
+              continue;
+            }
+            
             if (char === '{') {
               braceCount++;
             } else if (char === '}') {
@@ -392,59 +422,166 @@ async function storeNoteWithClassification(data) {
             }
           }
           
-          console.log('JSON结束位置:', jsonEnd);
+          console.log('JSON结束位置:', jsonEnd, '未闭合的大括号数:', braceCount);
           
           if (jsonEnd !== -1) {
             const jsonOnly = cleanedResponse.substring(jsonStart, jsonEnd + 1);
-            console.log('精确提取的JSON内容:', jsonOnly);
+            console.log('提取的JSON长度:', jsonOnly.length);
             
-            const parsedResponse = JSON.parse(jsonOnly);
-          console.log('解析后的AI响应:', parsedResponse);
-          
-          // 检查是否包含完整的分类信息
-          if (parsedResponse.primaryCategory && parsedResponse.secondaryCategory) {
-            // 验证 noteType 是否有效
-            let noteType = parsedResponse.noteType;
-            if (!noteType || noteType === '未分类笔记' || noteType === '未分类' || noteType.length < 2) {
-              // 自动生成 noteType
-              noteType = generateNoteTypeFromContent(parsedResponse);
+            try {
+              const parsedResponse = JSON.parse(jsonOnly);
+              console.log('JSON解析成功，字段:', Object.keys(parsedResponse));
+              
+              if (parsedResponse.primaryCategory && parsedResponse.secondaryCategory) {
+                let noteType = parsedResponse.noteType;
+                if (!noteType || noteType === '未分类笔记' || noteType === '未分类' || noteType.length < 2) {
+                  noteType = generateNoteTypeFromContent(parsedResponse);
+                }
+                
+                finalClassification = {
+                  primaryCategory: parsedResponse.primaryCategory,
+                  secondaryCategory: parsedResponse.secondaryCategory,
+                  noteType: noteType,
+                  formattedContent: parsedResponse.formattedContent || userInput,
+                  summary: parsedResponse.summary || '',
+                  keywords: parsedResponse.keywords || []
+                };
+                console.log('从完整JSON中提取分类信息成功');
+              } else {
+                parseError = 'AI响应缺少primaryCategory或secondaryCategory字段';
+              }
+            } catch (e) {
+              parseError = `JSON解析失败: ${e.message}`;
+              console.error('JSON解析错误:', e.message);
             }
-            
-            finalClassification = {
-              primaryCategory: parsedResponse.primaryCategory,
-              secondaryCategory: parsedResponse.secondaryCategory,
-              noteType: noteType,
-              formattedContent: parsedResponse.formattedContent || userInput,
-              summary: parsedResponse.summary || '',
-              keywords: parsedResponse.keywords || []
-            };
-            console.log('从AI响应中提取分类信息:', finalClassification);
           } else {
-            console.error('AI响应缺少完整的分类信息:', parsedResponse);
+            parseError = `JSON结构不完整，缺少 ${braceCount} 个闭合括号（AI响应可能被截断）`;
           }
         } else {
-          console.error('无法从AI响应中找到完整的JSON结构，结束位置未找到');
+          parseError = 'AI响应中没有找到JSON对象';
         }
-      } else {
-        console.error('无法从AI响应中找到JSON开始位置');
-      }
       } catch (error) {
-        console.error('解析AI响应中的分类信息失败:', error, '错误位置:', error.stack);
-        // 打印更多调试信息
-        console.error('AI响应原始长度:', aiResponse.length);
-        console.error('AI响应前1000字符:', aiResponse.substring(0, 1000));
+        parseError = `解析AI响应异常: ${error.message}`;
+        console.error('解析AI响应异常:', error);
+      }
+      
+      // 方法2: 如果完整JSON解析失败，使用正则表达式降级提取
+      if (!finalClassification && cleanedResponse) {
+        console.log('尝试使用正则表达式降级提取分类信息...');
+        
+        // 提取各个字段（即使JSON不完整）
+        const primaryCategoryMatch = cleanedResponse.match(/"primaryCategory"\s*:\s*"([^"]+)"/);
+        const secondaryCategoryMatch = cleanedResponse.match(/"secondaryCategory"\s*:\s*"([^"]+)"/);
+        const noteTypeMatch = cleanedResponse.match(/"noteType"\s*:\s*"([^"]+)"/);
+        const summaryMatch = cleanedResponse.match(/"summary"\s*:\s*"([^"]+)"/);
+        
+        // 提取keywords数组（简化处理）
+        const keywordsMatch = cleanedResponse.match(/"keywords"\s*:\s*\[([^\]]*)\]/);
+        let keywords = [];
+        if (keywordsMatch) {
+          const keywordsStr = keywordsMatch[1];
+          keywords = keywordsStr.match(/"([^"]+)"/g)?.map(k => k.replace(/"/g, '')) || [];
+        }
+        
+        // 提取formattedContent（可能很长，需要特殊处理）
+        let formattedContent = userInput;
+        const formattedContentMatch = cleanedResponse.match(/"formattedContent"\s*:\s*"/);
+        if (formattedContentMatch) {
+          const startIndex = formattedContentMatch.index + formattedContentMatch[0].length;
+          console.log('formattedContent 起始位置:', startIndex);
+          
+          // 寻找formattedContent的结束位置
+          let endIndex = -1;
+          let escape = false;
+          for (let i = startIndex; i < cleanedResponse.length; i++) {
+            if (escape) {
+              escape = false;
+              continue;
+            }
+            if (cleanedResponse[i] === '\\') {
+              escape = true;
+              continue;
+            }
+            if (cleanedResponse[i] === '"') {
+              endIndex = i;
+              break;
+            }
+          }
+          
+          console.log('formattedContent 结束位置:', endIndex);
+          
+          // 情况1：找到了闭合引号（完整提取）
+          if (endIndex > startIndex) {
+            formattedContent = cleanedResponse.substring(startIndex, endIndex)
+              .replace(/\\n/g, '\n')
+              .replace(/\\r/g, '\r')
+              .replace(/\\t/g, '\t')
+              .replace(/\\"/g, '"')
+              .replace(/\\\\/g, '\\');
+            console.log('formattedContent 提取成功（完整），长度:', formattedContent.length);
+          } 
+          // 情况2：没有找到闭合引号（JSON被截断），提取到末尾
+          else if (startIndex < cleanedResponse.length) {
+            console.log('formattedContent 未闭合（JSON被截断），提取到末尾...');
+            let truncatedContent = cleanedResponse.substring(startIndex);
+            
+            // 清理末尾可能的不完整JSON结构
+            truncatedContent = truncatedContent
+              .replace(/,?\s*"(?:summary|keywords|noteType)"?\s*:?\s*[\[\{"]?\s*$/, '')
+              .replace(/,?\s*"[^"]*$/, '')  // 移除未完成的字段名
+              .replace(/\s+$/, '');  // 移除末尾空白
+            
+            formattedContent = truncatedContent
+              .replace(/\\n/g, '\n')
+              .replace(/\\r/g, '\r')
+              .replace(/\\t/g, '\t')
+              .replace(/\\"/g, '"')
+              .replace(/\\\\/g, '\\');
+            
+            console.log('formattedContent 提取成功（截断），长度:', formattedContent.length);
+          }
+        } else {
+          console.log('未找到 formattedContent 字段，使用原始输入');
+        }
+        
+        console.log('正则提取结果:', {
+          primaryCategory: primaryCategoryMatch?.[1],
+          secondaryCategory: secondaryCategoryMatch?.[1],
+          noteType: noteTypeMatch?.[1],
+          summary: summaryMatch?.[1],
+          keywordsCount: keywords.length,
+          formattedContentLength: formattedContent.length
+        });
+        
+        if (primaryCategoryMatch && secondaryCategoryMatch) {
+          let noteType = noteTypeMatch?.[1];
+          if (!noteType || noteType === '未分类笔记' || noteType === '未分类' || noteType.length < 2) {
+            noteType = secondaryCategoryMatch[1].substring(0, 10);
+          }
+          
+          finalClassification = {
+            primaryCategory: primaryCategoryMatch[1],
+            secondaryCategory: secondaryCategoryMatch[1],
+            noteType: noteType,
+            formattedContent: formattedContent,
+            summary: summaryMatch?.[1] || '',
+            keywords: keywords
+          };
+          console.log('正则表达式降级提取成功:', finalClassification.primaryCategory, '/', finalClassification.secondaryCategory);
+          parseError = null; // 清除之前的错误
+        }
       }
     }
     
-    // 3. 如果没有获取到分类信息，抛出错误，完全依赖LLM返回的JSON
+    // 3. 如果没有获取到分类信息，抛出错误
     if (!finalClassification) {
-      throw new Error('无法从AI响应中提取有效的分类信息，请检查LLM返回的JSON格式是否正确');
+      throw new Error(parseError || '无法从AI响应中提取有效的分类信息，请检查LLM返回的JSON格式是否正确');
     }
     
     // 3. 生成笔记内容 - 使用AI整理后的内容，避免重复
     const formattedContent = finalClassification.formattedContent || userInput;
     const noteContent = `# 笔记\n\n## 整理后的内容\n${formattedContent}\n\n## 分类信息\n- **一级分类**: ${finalClassification.primaryCategory}\n- **二级分类**: ${finalClassification.secondaryCategory}\n\n## 核心要点\n${finalClassification.summary || '无'}\n\n## 关键词\n${finalClassification.keywords.length > 0 ? finalClassification.keywords.map(keyword => `- ${keyword}`).join('\n') : '无'}\n\n## 存储时间\n${new Date().toLocaleString('zh-CN')}`;
-    console.log('生成的笔记内容:', noteContent);
+    console.log('生成的笔记内容长度:', noteContent.length);
     
     // 4. 生成笔记标题
     const noteTitle = generateNoteTitle(userInput);
